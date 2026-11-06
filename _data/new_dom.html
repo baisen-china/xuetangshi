@@ -1,0 +1,39 @@
+    <div id="poem-stage">
+      <div id="poem-card" class="pinyin-on">
+        <div class="poem-title" id="poem-title">唐诗诵读</div>
+        <div class="poem-meta" id="poem-meta"></div>
+        <div class="poem-body" id="poem-body"></div>
+        <div class="poem-count" id="poem-count"></div>
+      </div>
+    </div>
+
+    <div id="poem-panel">
+      <div class="row">
+        <button id="poem-play" type="button">▶ 开始诵读</button>
+        <button id="poem-prev" type="button" title="上一首">⏮</button>
+        <button id="poem-next" type="button" title="下一首">⏭</button>
+      </div>
+      <label class="sel">每首诵读
+        <select id="poem-repeat" title="默认每首诵读 1 遍，之后自动切下一首">
+          <option value="1" selected>1 遍</option>
+          <option value="2">2 遍</option>
+          <option value="3">3 遍</option>
+          <option value="5">5 遍</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="poem-pinyin" checked /> 逐字拼音</label>
+      <label class="chk"><input type="checkbox" id="poem-resume" /> 接着上次继续（取消＝每次从第一首）</label>
+      <label class="chk"><input type="checkbox" id="poem-voice" checked /> 语音诵读（取消＝静音轮播）</label>
+      <div class="row">
+        <button id="poem-pick" type="button">载入 唐诗.txt</button>
+        <input id="poem-file" type="file" accept=".txt,text/plain" hidden />
+      </div>
+      <div id="poem-status">准备中…</div>
+    </div>
+
+    <!-- 离线拼音引擎：pinyin-pro UMD（内联，双击打开无需联网） -->
+    <script>__PINYIN_LIB__</script>
+    <script id="poem-pinyin-fixes" type="application/json">__PINYIN_FIXES__</script>
+    <script id="poem-data" type="text/plain">
+__POEM_DATA__    </script>
+

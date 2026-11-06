@@ -1,0 +1,176 @@
+      /* ===== 唐诗整首展示 ===== */
+      #poem-stage {
+        position: fixed;
+        left: 0; top: 0; right: 0; bottom: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      #poem-card {
+        pointer-events: auto;              /* 超长诗可在卡片内滚动查看 */
+        max-width: min(88vw, 780px);
+        max-height: 84vh;
+        overflow-y: auto;
+        padding: 28px 42px 24px;
+        text-align: center;
+        color: #f0dfbe;
+        background: rgba(12, 12, 12, .46);
+        border: 1px solid rgba(197, 168, 128, .3);
+        border-radius: 16px;
+        box-shadow: 0 10px 44px rgba(0, 0, 0, .4);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity .75s ease, transform .75s ease, border-color .5s, box-shadow .5s;
+        scrollbar-width: none;
+      }
+      #poem-card::-webkit-scrollbar { display: none; }
+      #poem-card.show { opacity: 1; transform: translateY(0); }
+      #poem-card.reading {
+        border-color: rgba(246, 227, 187, .6);
+        box-shadow: 0 0 34px rgba(246, 227, 187, .16), 0 10px 44px rgba(0, 0, 0, .4);
+      }
+      .poem-title {
+        font-size: clamp(23px, 3.2vw, 38px);
+        font-weight: 700;
+        letter-spacing: .08em;
+        color: #f6e3bb;
+      }
+      .poem-meta {
+        margin-top: 10px;
+        font-size: clamp(13px, 1.4vw, 17px);
+        letter-spacing: .12em;
+        color: #c5a880;
+        opacity: .9;
+      }
+      .poem-body {
+        margin-top: 20px;
+        font-size: clamp(17px, 2.05vw, 27px);
+        line-height: 1.95;
+        letter-spacing: .06em;
+      }
+      .poem-body div { white-space: nowrap; }
+      .poem-count {
+        margin-top: 18px;
+        font-size: 12px;
+        letter-spacing: .08em;
+        color: #c5a880;
+        opacity: .72;
+      }
+
+      /* ===== 逐字拼音 =====
+         每个字是独立的 inline-grid：第 1 行放拼音伪元素，第 2 行放汉字。
+         列宽自动取两者较宽者，因此 chuáng 这类长音节会自己把字格撑开，
+         绝不会与相邻字的拼音挤在一起。拼音存在 data-py 属性里，
+         DOM 文本仍只有纯汉字，复制 / textContent 都不会夹带拼音。 */
+      #poem-card .py {
+        display: inline-grid;
+        grid-auto-flow: row;
+        justify-items: center;
+        align-items: end;
+        vertical-align: bottom;
+        padding: 0 .09em;                  /* 相邻音节之间留出可见间隙 */
+        letter-spacing: 0;
+        line-height: 1;
+      }
+      #poem-card.pinyin-on .py[data-py]::before {
+        content: attr(data-py);
+        font-size: .5em;
+        line-height: 1.2;
+        font-weight: 400;
+        letter-spacing: 0;
+        white-space: nowrap;
+        color: #d8b98a;
+        opacity: .94;
+        pointer-events: none;
+      }
+      /* 拼音占位：给标题首行留头，并加大行距避免与上一行相撞 */
+      #poem-card.pinyin-on .poem-title { padding-top: .18em; }
+      #poem-card.pinyin-on .poem-meta { margin-top: 14px; }
+      #poem-card.pinyin-on .poem-body { line-height: 2.05; }
+
+      /* ===== 右下角控制面板 ===== */
+      #poem-panel {
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        z-index: 200;
+        width: 258px;
+        padding: 12px 13px;
+        background: rgba(12, 12, 12, .76);
+        border: 1px solid rgba(197, 168, 128, .38);
+        border-radius: 12px;
+        color: #c5a880;
+        font: 13px/1.6 sans-serif;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+      #poem-panel .row { display: flex; gap: 6px; margin-bottom: 8px; }
+      #poem-panel button {
+        flex: 1;
+        width: auto;
+        padding: 7px 6px;
+        font: inherit;
+        white-space: nowrap;
+        color: #f0dfbe;
+        background: rgba(30, 30, 30, .85);
+        border: 1px solid rgba(197, 168, 128, .5);
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      #poem-panel .row button:first-child { flex: 2.4; }
+      #poem-panel button:hover { background: rgba(70, 58, 42, .9); }
+      #poem-panel label.chk {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        width: auto;
+        margin: 0 0 6px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #e2cda6;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      #poem-panel label.chk input { margin: 0; }
+      #poem-panel label.sel {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: auto;                       /* 覆盖原页面全局 label{width:300px} */
+        max-width: 100%;
+        margin: 0 0 8px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #e2cda6;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      #poem-panel select {
+        flex: 0 0 auto;
+        max-width: 118px;
+        padding: 4px 6px;
+        font: inherit;
+        font-size: 12px;
+        color: #f0dfbe;
+        background: rgba(30, 30, 30, .9);
+        border: 1px solid rgba(197, 168, 128, .5);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #poem-panel select option { background: #1e1e1e; }
+      #poem-status {
+        margin-top: 6px;
+        max-width: none;
+        min-height: 2.9em;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #c5a880;
+        word-break: break-all;
+      }

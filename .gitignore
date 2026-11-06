@@ -1,0 +1,17 @@
+# 工作区里同时存放着其它圣诞树实验版本，只保留学唐诗主页面
+christmas_tree_*.html
+!christmas_tree_fixed.html
+
+# 圣诞老人素材、图片与临时校验脚本，与本项目无关
+santa_sleigh_*
+*.jpg
+*.png
+make_transparent.py
+temp_check*.js
+test.txt
+
+# 构建中间产物：改造前的原始页面备份
+_data/*.bak.html
+
+# 发布脚本的临时目录
+_gitpush_tmp/
