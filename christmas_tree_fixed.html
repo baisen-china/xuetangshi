@@ -142,7 +142,7 @@
         transition: background .4s ease;
       }
       #bg-dimmer.on { background: rgba(2, 3, 6, .44); }
-      #bg-dimmer.on.tree-off { background: rgba(2, 3, 6, .6); }
+      /* 红灯开关只影响树上的红点，不再联动压暗背景：彩灯与背景保持原样 */
       #poem-stage {
         position: fixed;
         left: 0; top: 0; right: 0; bottom: 0;
@@ -2440,7 +2440,7 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
       </label>
       <label class="chk"><input type="checkbox" id="poem-pinyin" checked /> 逐字拼音</label>
       <label class="chk"><input type="checkbox" id="poem-progress" checked /> 朗读进度变色</label>
-      <label class="chk"><input type="checkbox" id="poem-treelight" checked /> 圣诞树彩灯（取消＝熄灯）</label>
+      <label class="chk"><input type="checkbox" id="poem-treelight" checked /> 闪烁红灯（取消＝熄红灯，彩灯不变）</label>
       <label class="chk"><input type="checkbox" id="poem-dimmer" /> 背景压暗（默认原版背景）</label>
       <label class="chk"><input type="checkbox" id="poem-resume" /> 接着上次继续（取消＝每次从第一首）</label>
       <label class="chk"><input type="checkbox" id="poem-voice" checked /> 语音诵读（取消＝静音轮播）</label>
@@ -7851,20 +7851,16 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
         return true;
       }
 
-      /* ===== 圣诞树彩灯（亮 / 熄） + 背景压暗 =====
-         3D 圣诞树是 three.js 点精灵，颜色由 shader 输出。构建脚本在
-         addTree 的片元着色器里注入了共享 uniform「uTreeLight」，
-         这里只改它的值：1 = 原样亮灯，0.08 = 只留极淡的树形轮廓。
-         注意：绝不对 3D 画面用 backdrop-filter / transform / 缩放，
-         否则细密的彩灯会被糊成大光斑，看起来像背景被「放大」。 */
+      /* ===== 圣诞树闪烁红灯（亮 / 熄） =====
+         3D 圣诞树是一条 HSL 彩虹点带：色环首尾的红点随音频忽大忽小，
+         就是「一闪一闪的红灯」；其余青 / 绿 / 黄等点是固定常亮的彩灯。
+         构建脚本给每个点打了 isRed 标记，片元着色器用
+         mix( 1.0, uTreeLight, vIsRed ) —— 彩灯永远乘 1.0，只有红点乘开关亮度。
+         所以关灯只让红灯熄灭，彩灯一个都不变，也不动背景（不再压暗）。
+         注意：绝不对 3D 画面用 backdrop-filter / transform / 缩放。 */
       function applyTreeLight(on) {
         const u = window.__treeLight;
-        if (u) u.value = on ? 1 : 0.08;
-        const dim = document.getElementById("bg-dimmer");
-        if (dim && dim.classList) {
-          if (on) dim.classList.remove("tree-off");
-          else dim.classList.add("tree-off");
-        }
+        if (u) u.value = on ? 1 : 0;   // 1 = 红灯亮，0 = 红灯熄（彩灯不受影响）
       }
       function applyDimmer() {
         const dim = document.getElementById("bg-dimmer");
@@ -7981,7 +7977,7 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
           rec.treeLightOn = treeLightBox.checked;
           storeSet(POEM_LIGHT_KEY, rec.treeLightOn ? "1" : "0");
           applyTreeLight(rec.treeLightOn);
-          updateStatus(rec.treeLightOn ? "树灯已亮" : "树灯已熄");
+          updateStatus(rec.treeLightOn ? "红灯已亮" : "红灯已熄（彩灯不变）");
         });
         dimmerBox.addEventListener("change", function () {
           rec.dimmerOn = dimmerBox.checked;
@@ -8492,8 +8488,10 @@ function requestListData(url) {
       function addTree(scene, uniforms, totalPoints, treePosition) {
         const vertexShader = `
       attribute float mIndex;
+      attribute float isRed;
       varying vec3 vColor;
       varying float opacity;
+      varying float vIsRed;
       uniform sampler2D tAudioData;
 
       float norm(float value, float min, float max ){
@@ -8509,6 +8507,7 @@ function requestListData(url) {
 
 
       void main() {
+       vIsRed = isRed;
        vColor = color;
        vec3 p = position;
        vec4 mvPosition = modelViewMatrix * vec4( p, 1.0 );
@@ -8525,8 +8524,9 @@ function requestListData(url) {
       varying float opacity;
       uniform sampler2D pointTexture;
       uniform float uTreeLight;
+      varying float vIsRed;
       void main() {
-       gl_FragColor = vec4( vColor * uTreeLight, opacity );
+       gl_FragColor = vec4( vColor * mix( 1.0, uTreeLight, vIsRed ), opacity );
        gl_FragColor = gl_FragColor * texture2D( pointTexture, gl_PointCoord ); 
       }
       `;
@@ -8553,6 +8553,7 @@ function requestListData(url) {
         const sizes = [];
         const phases = [];
         const mIndexs = [];
+        const isReds = [];
 
         const color = new THREE.Color();
 
@@ -8567,7 +8568,9 @@ function requestListData(url) {
           positions.push(y + rand(-0.3 * modifier, 0.3 * modifier));
           positions.push(z + rand(-0.3 * modifier, 0.3 * modifier));
 
-          color.setHSL(map(i, 0, totalPoints, 1.0, 0.0), 1.0, 0.5);
+          const hue = map(i, 0, totalPoints, 1.0, 0.0);
+          color.setHSL(hue, 1.0, 0.5);
+          isReds.push(hue >= 0.90 || hue <= 0.10 ? 1.0 : 0.0);
 
           colors.push(color.r, color.g, color.b);
           phases.push(rand(1000));
@@ -8586,6 +8589,10 @@ function requestListData(url) {
         geometry.setAttribute(
           "color",
           new THREE.Float32BufferAttribute(colors, 3)
+        );
+        geometry.setAttribute(
+          "isRed",
+          new THREE.Float32BufferAttribute(isReds, 1)
         );
         geometry.setAttribute(
           "size",

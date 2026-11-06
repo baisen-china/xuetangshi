@@ -114,22 +114,55 @@ const oldInterval = /        showNextLabel\(\);\r?\n        \/\/ 一句飘落消
 if (!oldInterval.test(html)) throw new Error("未找到 init 内残留的飘落定时器");
 html = html.replace(oldInterval, "");
 
-// 6) 给 3D 圣诞树的点精灵注入共享亮度 uniform，供「树灯亮/熄」开关使用
-if (html.indexOf("uniform float uTreeLight;") < 0) {
+// 6) 只让「一闪一闪的红灯」受开关控制，固定彩灯恒亮
+//    树点颜色是一条 HSL 彩虹带（色相从 1.0 递减到 0.0），色环首尾 h≈1/0 就是红点，
+//    这些红点随音频脉动忽大忽小，视觉上就是一闪一闪的红灯；其余青/绿/黄等是常亮彩灯。
+//    做法：给每个点加 isRed 属性（红灯=1，彩灯=0），片元着色器用
+//    mix( 1.0, uTreeLight, vIsRed ) —— 彩灯永远乘 1.0，只有红点乘开关亮度。
+//    关灯时红点变黑（加色混合下等于熄灭），彩灯完全不变；也不再联动压暗背景。
+if (html.indexOf("attribute float isRed;") < 0) {
   const t0 = html.indexOf("function addTree(scene, uniforms, totalPoints, treePosition)");
   const t1 = html.indexOf("function addSnow(scene, uniforms)", t0 + 1);
   if (t0 < 0 || t1 < 0) throw new Error("未找到 addTree 区段");
   let seg = html.slice(t0, t1);
-  const fragRe = /(uniform sampler2D pointTexture;)(\s*void main\(\)\s*\{\s*gl_FragColor = vec4\( vColor, opacity \);)/;
+
+  // (a) 顶点着色器：声明 isRed 属性，把标记传给片元着色器
+  const vsDecl = /(attribute float mIndex;)(\s*)(varying vec3 vColor;\s*varying float opacity;)/;
+  if (!vsDecl.test(seg)) throw new Error("未找到 addTree 顶点着色器声明");
+  seg = seg.replace(vsDecl, (m, a, ws, b) =>
+    a + ws + "attribute float isRed;" + ws + b + ws + "varying float vIsRed;");
+  const vsMain = /(void main\(\)\s*\{\s*)(vColor = color;)/;
+  if (!vsMain.test(seg)) throw new Error("未找到 addTree 顶点 main");
+  seg = seg.replace(vsMain, "$1vIsRed = isRed;\n       $2");
+
+  // (b) 片元着色器：彩灯恒亮，只有红点受开关控制
+  const fragRe = /(uniform sampler2D pointTexture;)(\s*void main\(\)\s*\{\s*)gl_FragColor = vec4\( vColor, opacity \);/;
   if (!fragRe.test(seg)) throw new Error("未找到 addTree 片元着色器");
-  seg = seg.replace(fragRe, function (m, a, b) {
-    return a + "\n      uniform float uTreeLight;" +
-      b.replace("vec4( vColor, opacity )", "vec4( vColor * uTreeLight, opacity )");
-  });
+  seg = seg.replace(fragRe, (m, a, b) =>
+    a + "\n      uniform float uTreeLight;\n      varying float vIsRed;" + b +
+    "gl_FragColor = vec4( vColor * mix( 1.0, uTreeLight, vIsRed ), opacity );");
   const uniRe = /(uniforms: \{\s*\.\.\.uniforms,)/;
   if (!uniRe.test(seg)) throw new Error("未找到 addTree uniforms");
   seg = seg.replace(uniRe,
     '$1\n            uTreeLight: window.__treeLight || (window.__treeLight = { type: "f", value: 1.0 }),');
+
+  // (c) 生成点数据：按色相标记红点（色环首尾各 10%）
+  const arrRe = /(const mIndexs = \[\];)/;
+  if (!arrRe.test(seg)) throw new Error("未找到 addTree 数组声明");
+  seg = seg.replace(arrRe, "$1\n        const isReds = [];");
+  const hslRe = /color\.setHSL\(map\(i, 0, totalPoints, 1\.0, 0\.0\), 1\.0, 0\.5\);/;
+  if (!hslRe.test(seg)) throw new Error("未找到 addTree 色相赋值");
+  seg = seg.replace(hslRe,
+    "const hue = map(i, 0, totalPoints, 1.0, 0.0);\n" +
+    "          color.setHSL(hue, 1.0, 0.5);\n" +
+    "          isReds.push(hue >= 0.90 || hue <= 0.10 ? 1.0 : 0.0);");
+
+  // (d) 把 isRed 写进几何体属性
+  const attrRe = /(geometry\.setAttribute\(\s*"color",\s*new THREE\.Float32BufferAttribute\(colors, 3\)\s*\);)/;
+  if (!attrRe.test(seg)) throw new Error("未找到 addTree color 属性");
+  seg = seg.replace(attrRe,
+    '$1\n        geometry.setAttribute(\n          "isRed",\n          new THREE.Float32BufferAttribute(isReds, 1)\n        );');
+
   html = html.slice(0, t0) + seg + html.slice(t1);
 }
 

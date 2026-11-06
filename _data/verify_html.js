@@ -71,7 +71,7 @@ ids.forEach((id) => chk('id="' + id + '" 唯一', (h.match(new RegExp('id="' + i
 chk("重复次数默认选中 1 遍", /<option value="1" selected>/.test(h));
 chk("拼音开关默认勾选", /id="poem-pinyin" checked/.test(h));
 chk("朗读进度开关默认勾选", /id="poem-progress" checked/.test(h));
-chk("树灯开关默认勾选", /id="poem-treelight" checked/.test(h));
+chk("红灯开关默认勾选", /id="poem-treelight" checked/.test(h));
 chk("背景压暗开关默认不勾（保持原版背景）", /<input type="checkbox" id="poem-dimmer" \/>/.test(h) && !/id="poem-dimmer" checked/.test(h));
 chk("压暗层默认透明、勾选后才生效", /#bg-dimmer\s*\{[^}]*background: none;/.test(C || "") && /#bg-dimmer\.on\s*\{/.test(C || ""));
 chk("页面不再模糊背景（彩灯不会被糊成大光斑）", !/backdrop-filter\s*:/i.test(h));
@@ -83,8 +83,17 @@ chk("进度状态机已注入", /function startProgress/.test(M) && /onSpeechBou
 chk("诵读代次令牌已注入（防下一首错开）", /function bumpGen/.test(M) && /function schedule/.test(M) && /g !== rec\.gen/.test(M));
 chk("自适应字号已注入", /function fitPoemFont/.test(M) && /createRange/.test(M));
 chk("背景压暗层与打赏弹层样式存在", /#bg-dimmer/.test(h) && /#tip-modal/.test(h) && /#tip-qr/.test(h));
-chk("树灯 shader uniform 已注入", /uniform float uTreeLight;/.test(h) &&
-  /vColor \* uTreeLight/.test(h) && /window\.__treeLight =/.test(h));
+chk("红灯标记已注入 shader（isRed 属性 + varying）",
+  /attribute float isRed;/.test(h) && /varying float vIsRed;/.test(h) &&
+  /vIsRed = isRed;/.test(h) && /Float32BufferAttribute\(isReds, 1\)/.test(h));
+chk("只有红点受开关控制，彩灯恒乘 1.0",
+  /mix\( 1\.0, uTreeLight, vIsRed \)/.test(h) &&
+  /isReds\.push\(hue >= 0\.90 \|\| hue <= 0\.10/.test(h) &&
+  /window\.__treeLight =/.test(h) &&
+  !/vColor \* uTreeLight, opacity/.test(h));
+chk("熄红灯不再额外压暗背景（彩灯与背景不变）",
+  !/tree-off/.test(h) && !/u\.value = on \? 1 : 0\.08/.test(M));
+chk("开关文案已改为只控红灯", /闪烁红灯（取消＝熄红灯，彩灯不变）/.test(h));
 chk("打赏数据与指纹校验逻辑存在", /function tipHash/.test(M) && /function initTipQr/.test(M));
 chk("无未替换占位符", !/__PINYIN_LIB__|__PINYIN_FIXES__|__POEM_DATA__|__TIP_QR_B64__|__TIP_QR_HASH__/.test(h));
 chk("无旧飘落逻辑残留", !/my_labels|showNextLabel|LABEL_MS|setPoemLines/.test(h));

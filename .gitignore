@@ -15,3 +15,6 @@ _data/*.bak.html
 
 # 发布脚本的临时目录
 _gitpush_tmp/
+
+# 运行时截图 / 对比页等工作产物
+cipan/

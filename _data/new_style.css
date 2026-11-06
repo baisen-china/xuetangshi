@@ -13,7 +13,7 @@
         transition: background .4s ease;
       }
       #bg-dimmer.on { background: rgba(2, 3, 6, .44); }
-      #bg-dimmer.on.tree-off { background: rgba(2, 3, 6, .6); }
+      /* 红灯开关只影响树上的红点，不再联动压暗背景：彩灯与背景保持原样 */
       #poem-stage {
         position: fixed;
         left: 0; top: 0; right: 0; bottom: 0;

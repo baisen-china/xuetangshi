@@ -500,20 +500,16 @@
         return true;
       }
 
-      /* ===== 圣诞树彩灯（亮 / 熄） + 背景压暗 =====
-         3D 圣诞树是 three.js 点精灵，颜色由 shader 输出。构建脚本在
-         addTree 的片元着色器里注入了共享 uniform「uTreeLight」，
-         这里只改它的值：1 = 原样亮灯，0.08 = 只留极淡的树形轮廓。
-         注意：绝不对 3D 画面用 backdrop-filter / transform / 缩放，
-         否则细密的彩灯会被糊成大光斑，看起来像背景被「放大」。 */
+      /* ===== 圣诞树闪烁红灯（亮 / 熄） =====
+         3D 圣诞树是一条 HSL 彩虹点带：色环首尾的红点随音频忽大忽小，
+         就是「一闪一闪的红灯」；其余青 / 绿 / 黄等点是固定常亮的彩灯。
+         构建脚本给每个点打了 isRed 标记，片元着色器用
+         mix( 1.0, uTreeLight, vIsRed ) —— 彩灯永远乘 1.0，只有红点乘开关亮度。
+         所以关灯只让红灯熄灭，彩灯一个都不变，也不动背景（不再压暗）。
+         注意：绝不对 3D 画面用 backdrop-filter / transform / 缩放。 */
       function applyTreeLight(on) {
         const u = window.__treeLight;
-        if (u) u.value = on ? 1 : 0.08;
-        const dim = document.getElementById("bg-dimmer");
-        if (dim && dim.classList) {
-          if (on) dim.classList.remove("tree-off");
-          else dim.classList.add("tree-off");
-        }
+        if (u) u.value = on ? 1 : 0;   // 1 = 红灯亮，0 = 红灯熄（彩灯不受影响）
       }
       function applyDimmer() {
         const dim = document.getElementById("bg-dimmer");
@@ -630,7 +626,7 @@
           rec.treeLightOn = treeLightBox.checked;
           storeSet(POEM_LIGHT_KEY, rec.treeLightOn ? "1" : "0");
           applyTreeLight(rec.treeLightOn);
-          updateStatus(rec.treeLightOn ? "树灯已亮" : "树灯已熄");
+          updateStatus(rec.treeLightOn ? "红灯已亮" : "红灯已熄（彩灯不变）");
         });
         dimmerBox.addEventListener("change", function () {
           rec.dimmerOn = dimmerBox.checked;

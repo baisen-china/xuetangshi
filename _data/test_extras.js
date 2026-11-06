@@ -83,22 +83,35 @@ const chk = (name, ok, extra) => {
   checks.push(ok);
 };
 
-console.log("=== A 树灯亮 / 熄开关 ===");
+console.log("=== A 闪烁红灯亮 / 熄开关（固定彩灯不变）===");
 const a = scene({});
-chk("默认亮灯：uniform = 1、遮罩无 tree-off", a.win.__treeLight.value === 1 &&
-  !a.get("bg-dimmer").classList.contains("tree-off"));
+chk("默认亮灯：uniform = 1、背景不被压暗", a.win.__treeLight.value === 1 &&
+  !a.get("bg-dimmer").classList.contains("tree-off") &&
+  !a.get("bg-dimmer").classList.contains("on"));
 chk("复选框默认勾选", a.get("poem-treelight").checked === true && a.T.rec.treeLightOn === true);
 const lightBox = a.get("poem-treelight");
 lightBox.checked = false;
 lightBox._ev.change();
-chk("熄灯：uniform 降到 0.08、遮罩加 tree-off", a.win.__treeLight.value === 0.08 &&
-  a.get("bg-dimmer").classList.contains("tree-off"));
+chk("熄红灯：uniform = 0（不是压暗整棵树）", a.win.__treeLight.value === 0);
+chk("熄红灯不动背景压暗层（彩灯与背景保持原样）",
+  !a.get("bg-dimmer").classList.contains("tree-off") &&
+  !a.get("bg-dimmer").classList.contains("on"));
 chk("熄灯状态写入 localStorage", a.store["tangpoem.treelight"] === "0");
 lightBox.checked = true;
 lightBox._ev.change();
 chk("再点亮：uniform 回到 1", a.win.__treeLight.value === 1 && a.store["tangpoem.treelight"] === "1");
 const b = scene({ store: { "tangpoem.treelight": "0" } });
-chk("重开页面记得上次熄灯", b.win.__treeLight.value === 0.08 && b.get("poem-treelight").checked === false);
+chk("重开页面记得上次熄红灯", b.win.__treeLight.value === 0 && b.get("poem-treelight").checked === false);
+
+// 静态校验：shader 里只有红点乘开关，彩灯恒乘 1.0
+const pageHtml = fs.readFileSync("C:/c/inventory/christmas_tree_fixed.html", "utf8");
+chk("shader 用 isRed 区分红灯 / 彩灯", /attribute float isRed;/.test(pageHtml) &&
+  /varying float vIsRed;/.test(pageHtml) && /vIsRed = isRed;/.test(pageHtml));
+chk("彩灯恒亮：mix(1.0, uTreeLight, vIsRed)", /mix\( 1\.0, uTreeLight, vIsRed \)/.test(pageHtml) &&
+  !/vColor \* uTreeLight, opacity/.test(pageHtml));
+chk("红色判定只覆盖色环首尾", /isReds\.push\(hue >= 0\.90 \|\| hue <= 0\.10/.test(pageHtml) &&
+  /Float32BufferAttribute\(isReds, 1\)/.test(pageHtml));
+chk("页面不再引用 tree-off 背景压暗", !/tree-off/.test(pageHtml));
 
 console.log("\n=== B 打赏按钮与二维码数据校验 ===");
 chk("指纹算法与构建脚本一致", a.T.tipHash(qrB64) === qrHash, qrHash);
