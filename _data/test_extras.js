@@ -136,6 +136,27 @@ chk("长诗自动缩小且不低于 32px", longPoem < short && longPoem >= 32, l
 chk("超长句自动缩小且不低于 22px", longLine < short && longLine >= 22, longLine + "px");
 chk("行高随拼音/行数设置", !!a.get("poem-body").style.lineHeight);
 
+console.log("\n=== D 背景压暗（默认恢复原版圣诞夜背景） ===");
+const d0 = scene({});
+chk("默认不压暗：dimmerOn=false、遮罩无 on 类", d0.T.rec.dimmerOn === false &&
+  !d0.get("bg-dimmer").classList.contains("on"));
+chk("复选框默认不勾", d0.get("poem-dimmer").checked === false);
+const dimBox = d0.get("poem-dimmer");
+dimBox.checked = true;
+dimBox._ev.change();
+chk("勾选后开启压暗并写入 localStorage", d0.T.rec.dimmerOn === true &&
+  d0.get("bg-dimmer").classList.contains("on") && d0.store["tangpoem.dimmer"] === "1");
+dimBox.checked = false;
+dimBox._ev.change();
+chk("取消后恢复原版背景", !d0.get("bg-dimmer").classList.contains("on") &&
+  d0.store["tangpoem.dimmer"] === "0");
+const d1 = scene({ store: { "tangpoem.dimmer": "1" } });
+chk("重开页面记得上次压暗选择", d1.T.rec.dimmerOn === true &&
+  d1.get("poem-dimmer").checked === true && d1.get("bg-dimmer").classList.contains("on"));
+const cssText = fs.readFileSync(D + "new_style.css", "utf8");
+chk("样式表不再模糊 / 缩放背景", !/backdrop-filter\s*:|transform:\s*scale/i.test(cssText));
+chk("压暗层默认透明", /#bg-dimmer\s*\{[^}]*background: none;/.test(cssText));
+
 console.log("\n=== 结论 ===");
 const ok = checks.every(Boolean);
 console.log(ok ? checks.length + " 项断言全部通过" : "存在失败项");

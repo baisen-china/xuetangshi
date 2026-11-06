@@ -1,19 +1,19 @@
       /* ===== 唐诗整首展示（幼儿向：大字为主，圣诞夜背景退后） ===== */
+      /* ===== 背景压暗层 =====
+         默认不压暗，圣诞夜背景保持原始观感（细密清晰的彩灯、雪点、树形）。
+         曾经用 backdrop-filter 模糊卡片背后画面，会把每个小灯点糊成大光斑，
+         视觉上就像「背景被放大」——已全部移除，不再对 3D 画面做任何缩放或模糊。
+         需要让孩子更专注读诗时，可勾选面板里的「背景压暗」。 */
       #bg-dimmer {
         position: fixed;
         left: 0; top: 0; right: 0; bottom: 0;
         z-index: 50;
         pointer-events: none;              /* 不挡任何点击 */
-        background:
-          radial-gradient(ellipse 64% 64% at 50% 50%, rgba(2, 3, 6, .72), rgba(2, 3, 6, 0) 100%),
-          rgba(2, 3, 6, .42);
-        transition: background .5s ease;
+        background: none;                  /* 默认：原版背景，原样显示 */
+        transition: background .4s ease;
       }
-      #bg-dimmer.tree-off {
-        background:
-          radial-gradient(ellipse 64% 64% at 50% 50%, rgba(2, 3, 6, .78), rgba(2, 3, 6, 0) 100%),
-          rgba(2, 3, 6, .5);
-      }
+      #bg-dimmer.on { background: rgba(2, 3, 6, .44); }
+      #bg-dimmer.on.tree-off { background: rgba(2, 3, 6, .6); }
       #poem-stage {
         position: fixed;
         left: 0; top: 0; right: 0; bottom: 0;
@@ -32,12 +32,10 @@
         padding: 30px 46px 26px;
         text-align: center;
         color: #f0dfbe;
-        background: rgba(9, 10, 13, .78);
+        background: rgba(9, 10, 13, .9);   /* 不模糊背景，靠深色底保证大字清晰 */
         border: 1px solid rgba(197, 168, 128, .3);
         border-radius: 18px;
         box-shadow: 0 10px 44px rgba(0, 0, 0, .5);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
         opacity: 0;
         transform: translateY(20px);
         transition: opacity .75s ease, transform .75s ease, border-color .5s, box-shadow .5s;
@@ -143,8 +141,6 @@
         border-radius: 12px;
         color: #c5a880;
         font: 13px/1.6 sans-serif;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
       }
       #poem-panel .row { display: flex; gap: 6px; margin-bottom: 8px; }
       #poem-panel button {
@@ -227,8 +223,6 @@
         border: 1px solid rgba(197, 168, 128, .55);
         border-radius: 999px;
         cursor: pointer;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
       }
       #tip-open:hover { background: rgba(70, 58, 42, .92); }
       #tip-modal {

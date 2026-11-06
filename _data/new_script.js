@@ -11,6 +11,7 @@
       const POEM_PINYIN_KEY = "tangpoem.pinyin";
       const POEM_PROGRESS_KEY = "tangpoem.progress";
       const POEM_LIGHT_KEY = "tangpoem.treelight";
+      const POEM_DIMMER_KEY = "tangpoem.dimmer";
       const POEM_TIPSHOWN_KEY = "tangpoem.tipshown";
 
       let poems = [];
@@ -21,6 +22,7 @@
         pinyinOn: true,
         progressOn: true,          // 诵读时逐字变色显示进度
         treeLightOn: true,
+        dimmerOn: false,           // 默认不压暗，保持原版圣诞夜背景
         playing: false,
         gen: 0,                    // 诵读代次：切诗/暂停/中断时自增，作废所有旧异步回调
         timer: null,
@@ -498,10 +500,12 @@
         return true;
       }
 
-      /* ===== 圣诞树彩灯（亮 / 熄） =====
+      /* ===== 圣诞树彩灯（亮 / 熄） + 背景压暗 =====
          3D 圣诞树是 three.js 点精灵，颜色由 shader 输出。构建脚本在
          addTree 的片元着色器里注入了共享 uniform「uTreeLight」，
-         这里只改它的值：1 = 原样亮灯，0.08 = 只留极淡的树形轮廓。 */
+         这里只改它的值：1 = 原样亮灯，0.08 = 只留极淡的树形轮廓。
+         注意：绝不对 3D 画面用 backdrop-filter / transform / 缩放，
+         否则细密的彩灯会被糊成大光斑，看起来像背景被「放大」。 */
       function applyTreeLight(on) {
         const u = window.__treeLight;
         if (u) u.value = on ? 1 : 0.08;
@@ -510,6 +514,12 @@
           if (on) dim.classList.remove("tree-off");
           else dim.classList.add("tree-off");
         }
+      }
+      function applyDimmer() {
+        const dim = document.getElementById("bg-dimmer");
+        if (!dim || !dim.classList) return;
+        if (rec.dimmerOn) dim.classList.add("on");
+        else dim.classList.remove("on");
       }
 
       /* ===== 打赏二维码 =====
@@ -559,20 +569,24 @@
         rec.pinyinOn = storeGet(POEM_PINYIN_KEY, "1") === "1";
         rec.progressOn = storeGet(POEM_PROGRESS_KEY, "1") === "1";
         rec.treeLightOn = storeGet(POEM_LIGHT_KEY, "1") === "1";
+        rec.dimmerOn = storeGet(POEM_DIMMER_KEY, "0") === "1";
 
         const resumeBox = document.getElementById("poem-resume");
         const voiceBox = document.getElementById("poem-voice");
         const pinyinBox = document.getElementById("poem-pinyin");
         const progressBox = document.getElementById("poem-progress");
         const treeLightBox = document.getElementById("poem-treelight");
+        const dimmerBox = document.getElementById("poem-dimmer");
         const repeatSel = document.getElementById("poem-repeat");
         resumeBox.checked = rec.resumeMode;
         voiceBox.checked = rec.voiceOn;
         pinyinBox.checked = rec.pinyinOn;
         progressBox.checked = rec.progressOn;
         treeLightBox.checked = rec.treeLightOn;
+        dimmerBox.checked = rec.dimmerOn;
         repeatSel.value = String(rec.repeat);
         applyTreeLight(rec.treeLightOn);
+        applyDimmer();
         initTipQr();
 
         poems = parsePoemBook(builtinPoemText());
@@ -617,6 +631,12 @@
           storeSet(POEM_LIGHT_KEY, rec.treeLightOn ? "1" : "0");
           applyTreeLight(rec.treeLightOn);
           updateStatus(rec.treeLightOn ? "树灯已亮" : "树灯已熄");
+        });
+        dimmerBox.addEventListener("change", function () {
+          rec.dimmerOn = dimmerBox.checked;
+          storeSet(POEM_DIMMER_KEY, rec.dimmerOn ? "1" : "0");
+          applyDimmer();
+          updateStatus(rec.dimmerOn ? "背景已压暗" : "已恢复原版背景");
         });
         resumeBox.addEventListener("change", function () {
           rec.resumeMode = resumeBox.checked;

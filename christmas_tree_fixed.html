@@ -128,21 +128,21 @@
         opacity: 1;
       }
       /* ===== 唐诗整首展示（幼儿向：大字为主，圣诞夜背景退后） ===== */
+      /* ===== 背景压暗层 =====
+         默认不压暗，圣诞夜背景保持原始观感（细密清晰的彩灯、雪点、树形）。
+         曾经用 backdrop-filter 模糊卡片背后画面，会把每个小灯点糊成大光斑，
+         视觉上就像「背景被放大」——已全部移除，不再对 3D 画面做任何缩放或模糊。
+         需要让孩子更专注读诗时，可勾选面板里的「背景压暗」。 */
       #bg-dimmer {
         position: fixed;
         left: 0; top: 0; right: 0; bottom: 0;
         z-index: 50;
         pointer-events: none;              /* 不挡任何点击 */
-        background:
-          radial-gradient(ellipse 64% 64% at 50% 50%, rgba(2, 3, 6, .72), rgba(2, 3, 6, 0) 100%),
-          rgba(2, 3, 6, .42);
-        transition: background .5s ease;
+        background: none;                  /* 默认：原版背景，原样显示 */
+        transition: background .4s ease;
       }
-      #bg-dimmer.tree-off {
-        background:
-          radial-gradient(ellipse 64% 64% at 50% 50%, rgba(2, 3, 6, .78), rgba(2, 3, 6, 0) 100%),
-          rgba(2, 3, 6, .5);
-      }
+      #bg-dimmer.on { background: rgba(2, 3, 6, .44); }
+      #bg-dimmer.on.tree-off { background: rgba(2, 3, 6, .6); }
       #poem-stage {
         position: fixed;
         left: 0; top: 0; right: 0; bottom: 0;
@@ -161,12 +161,10 @@
         padding: 30px 46px 26px;
         text-align: center;
         color: #f0dfbe;
-        background: rgba(9, 10, 13, .78);
+        background: rgba(9, 10, 13, .9);   /* 不模糊背景，靠深色底保证大字清晰 */
         border: 1px solid rgba(197, 168, 128, .3);
         border-radius: 18px;
         box-shadow: 0 10px 44px rgba(0, 0, 0, .5);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
         opacity: 0;
         transform: translateY(20px);
         transition: opacity .75s ease, transform .75s ease, border-color .5s, box-shadow .5s;
@@ -272,8 +270,6 @@
         border-radius: 12px;
         color: #c5a880;
         font: 13px/1.6 sans-serif;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
       }
       #poem-panel .row { display: flex; gap: 6px; margin-bottom: 8px; }
       #poem-panel button {
@@ -356,8 +352,6 @@
         border: 1px solid rgba(197, 168, 128, .55);
         border-radius: 999px;
         cursor: pointer;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
       }
       #tip-open:hover { background: rgba(70, 58, 42, .92); }
       #tip-modal {
@@ -2418,7 +2412,7 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
 
     <div id="overlay">
     </div>
-    <!-- 背景压暗层：让 3D 圣诞夜退到后面，诗文成为主角 -->
+    <!-- 背景压暗层：默认透明，圣诞夜背景保持原始观感；勾选「背景压暗」后才生效 -->
     <div id="bg-dimmer"></div>
 
     <div id="poem-stage">
@@ -2447,6 +2441,7 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
       <label class="chk"><input type="checkbox" id="poem-pinyin" checked /> 逐字拼音</label>
       <label class="chk"><input type="checkbox" id="poem-progress" checked /> 朗读进度变色</label>
       <label class="chk"><input type="checkbox" id="poem-treelight" checked /> 圣诞树彩灯（取消＝熄灯）</label>
+      <label class="chk"><input type="checkbox" id="poem-dimmer" /> 背景压暗（默认原版背景）</label>
       <label class="chk"><input type="checkbox" id="poem-resume" /> 接着上次继续（取消＝每次从第一首）</label>
       <label class="chk"><input type="checkbox" id="poem-voice" checked /> 语音诵读（取消＝静音轮播）</label>
       <div class="row">
@@ -7367,6 +7362,7 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
       const POEM_PINYIN_KEY = "tangpoem.pinyin";
       const POEM_PROGRESS_KEY = "tangpoem.progress";
       const POEM_LIGHT_KEY = "tangpoem.treelight";
+      const POEM_DIMMER_KEY = "tangpoem.dimmer";
       const POEM_TIPSHOWN_KEY = "tangpoem.tipshown";
 
       let poems = [];
@@ -7377,6 +7373,7 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
         pinyinOn: true,
         progressOn: true,          // 诵读时逐字变色显示进度
         treeLightOn: true,
+        dimmerOn: false,           // 默认不压暗，保持原版圣诞夜背景
         playing: false,
         gen: 0,                    // 诵读代次：切诗/暂停/中断时自增，作废所有旧异步回调
         timer: null,
@@ -7854,10 +7851,12 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
         return true;
       }
 
-      /* ===== 圣诞树彩灯（亮 / 熄） =====
+      /* ===== 圣诞树彩灯（亮 / 熄） + 背景压暗 =====
          3D 圣诞树是 three.js 点精灵，颜色由 shader 输出。构建脚本在
          addTree 的片元着色器里注入了共享 uniform「uTreeLight」，
-         这里只改它的值：1 = 原样亮灯，0.08 = 只留极淡的树形轮廓。 */
+         这里只改它的值：1 = 原样亮灯，0.08 = 只留极淡的树形轮廓。
+         注意：绝不对 3D 画面用 backdrop-filter / transform / 缩放，
+         否则细密的彩灯会被糊成大光斑，看起来像背景被「放大」。 */
       function applyTreeLight(on) {
         const u = window.__treeLight;
         if (u) u.value = on ? 1 : 0.08;
@@ -7866,6 +7865,12 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
           if (on) dim.classList.remove("tree-off");
           else dim.classList.add("tree-off");
         }
+      }
+      function applyDimmer() {
+        const dim = document.getElementById("bg-dimmer");
+        if (!dim || !dim.classList) return;
+        if (rec.dimmerOn) dim.classList.add("on");
+        else dim.classList.remove("on");
       }
 
       /* ===== 打赏二维码 =====
@@ -7915,20 +7920,24 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
         rec.pinyinOn = storeGet(POEM_PINYIN_KEY, "1") === "1";
         rec.progressOn = storeGet(POEM_PROGRESS_KEY, "1") === "1";
         rec.treeLightOn = storeGet(POEM_LIGHT_KEY, "1") === "1";
+        rec.dimmerOn = storeGet(POEM_DIMMER_KEY, "0") === "1";
 
         const resumeBox = document.getElementById("poem-resume");
         const voiceBox = document.getElementById("poem-voice");
         const pinyinBox = document.getElementById("poem-pinyin");
         const progressBox = document.getElementById("poem-progress");
         const treeLightBox = document.getElementById("poem-treelight");
+        const dimmerBox = document.getElementById("poem-dimmer");
         const repeatSel = document.getElementById("poem-repeat");
         resumeBox.checked = rec.resumeMode;
         voiceBox.checked = rec.voiceOn;
         pinyinBox.checked = rec.pinyinOn;
         progressBox.checked = rec.progressOn;
         treeLightBox.checked = rec.treeLightOn;
+        dimmerBox.checked = rec.dimmerOn;
         repeatSel.value = String(rec.repeat);
         applyTreeLight(rec.treeLightOn);
+        applyDimmer();
         initTipQr();
 
         poems = parsePoemBook(builtinPoemText());
@@ -7973,6 +7982,12 @@ new la({color:void 0!==b?b:16777215}))};k.WrapAroundEnding=2402;k.XHRLoader=func
           storeSet(POEM_LIGHT_KEY, rec.treeLightOn ? "1" : "0");
           applyTreeLight(rec.treeLightOn);
           updateStatus(rec.treeLightOn ? "树灯已亮" : "树灯已熄");
+        });
+        dimmerBox.addEventListener("change", function () {
+          rec.dimmerOn = dimmerBox.checked;
+          storeSet(POEM_DIMMER_KEY, rec.dimmerOn ? "1" : "0");
+          applyDimmer();
+          updateStatus(rec.dimmerOn ? "背景已压暗" : "已恢复原版背景");
         });
         resumeBox.addEventListener("change", function () {
           rec.resumeMode = resumeBox.checked;

@@ -63,7 +63,7 @@ try {
 console.log("\n=== DOM / 控件 / 样式 ===");
 const ids = ["poem-stage", "poem-card", "poem-title", "poem-meta", "poem-body", "poem-count",
   "poem-panel", "poem-play", "poem-prev", "poem-next", "poem-repeat", "poem-pinyin",
-  "poem-progress", "poem-treelight", "bg-dimmer",
+  "poem-progress", "poem-treelight", "poem-dimmer", "bg-dimmer",
   "poem-resume", "poem-voice", "poem-pick", "poem-file", "poem-status",
   "tip-open", "tip-modal", "tip-close", "tip-qr", "tip-note", "tip-qr-data", "tip-qr-hash",
   "poem-pinyin-fixes", "poem-data"];
@@ -72,6 +72,11 @@ chk("重复次数默认选中 1 遍", /<option value="1" selected>/.test(h));
 chk("拼音开关默认勾选", /id="poem-pinyin" checked/.test(h));
 chk("朗读进度开关默认勾选", /id="poem-progress" checked/.test(h));
 chk("树灯开关默认勾选", /id="poem-treelight" checked/.test(h));
+chk("背景压暗开关默认不勾（保持原版背景）", /<input type="checkbox" id="poem-dimmer" \/>/.test(h) && !/id="poem-dimmer" checked/.test(h));
+chk("压暗层默认透明、勾选后才生效", /#bg-dimmer\s*\{[^}]*background: none;/.test(C || "") && /#bg-dimmer\.on\s*\{/.test(C || ""));
+chk("页面不再模糊背景（彩灯不会被糊成大光斑）", !/backdrop-filter\s*:/i.test(h));
+chk("未对 3D 画面做缩放", !/transform:\s*scale/i.test(C || ""));
+chk("压暗开关逻辑已注入", /function applyDimmer/.test(M) && /POEM_DIMMER_KEY/.test(M));
 chk("拼音伪元素样式存在", /\.py\[data-py\]::before/.test(h));
 chk("逐字进度三态样式存在", /\.py\.read/.test(h) && /\.py\.cur/.test(h) && /reading\.progress-on/.test(h));
 chk("进度状态机已注入", /function startProgress/.test(M) && /onSpeechBoundary/.test(M));
