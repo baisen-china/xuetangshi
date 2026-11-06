@@ -2,13 +2,14 @@
          · 数据：内联的 poem-data 文本节点中存有全量诗库（双击打开即可用）；
            通过本地服务器打开时会自动 fetch 同目录「唐诗.txt」覆盖；
            file:// 下也可点右下角「载入 唐诗.txt」手动选择
-         · 流程：整首显示（逐字拼音）→ 诵读 N 遍（默认 1 遍）→ 停顿 → 下一首 → 全库循环
-         · 开关：每首诵读遍数、逐字拼音显隐、「接着上次继续」用 localStorage 记住位置 */
+         · 流程：整首显示（逐字拼音 + 逐字进度变色）→ 诵读 N 遍（默认 1 遍）→ 停顿 → 下一首 → 全库循环
+         · 开关：每首诵读遍数、逐字拼音、朗读进度变色、「接着上次继续」，均用 localStorage 记住 */
 
       const POEM_INDEX_KEY = "tangpoem.index";
       const POEM_RESUME_KEY = "tangpoem.resume";
       const POEM_REPEAT_KEY = "tangpoem.repeat";
       const POEM_PINYIN_KEY = "tangpoem.pinyin";
+      const POEM_PROGRESS_KEY = "tangpoem.progress";
 
       let poems = [];
       const rec = {
@@ -16,12 +17,15 @@
         round: 0,
         repeat: 1,                 // 每首诵读遍数，默认 1
         pinyinOn: true,
+        progressOn: true,          // 诵读时逐字变色显示进度
         playing: false,
         timer: null,
         keepTimer: null,
         voiceOn: true,
         resumeMode: false,
         synth: window.speechSynthesis || null,
+        chars: [],                 // 当前诗所有逐字 span，按阅读顺序
+        prog: { timer: null, start: 0, duration: 1, idx: -1, boundary: 0 },
       };
 
       /* ===== 拼音引擎 =====
@@ -69,24 +73,25 @@
         return out;
       }
 
-      /* 把一行文字拆成逐字 span，拼音放在 data-py 属性里由 CSS 伪元素显示。
-         这样 element.textContent 仍是纯汉字，不影响复制与状态判断。 */
+      /* 把一行文字拆成逐字 span；拼音放在 data-py 里由 CSS 伪元素显示。
+         不管拼音开关与否都拆字，这样朗读进度才能精确到「字」；
+         element.textContent 仍是纯汉字，不影响复制与状态判断。
+         所有字节点按阅读顺序收进 rec.chars，供进度高亮使用。 */
       function fillText(el, text) {
-        if (!rec.pinyinOn || !PY_ENGINE) { el.textContent = text; return; }
         const chars = Array.from(text);
-        const py = pinyinFor(text);
-        if (!py) { el.textContent = text; return; }
+        const py = (rec.pinyinOn && PY_ENGINE) ? pinyinFor(text) : null;
         el.textContent = "";
         for (let i = 0; i < chars.length; i++) {
           const c = chars[i];
           const s = document.createElement("span");
           s.className = "py";
           s.textContent = c;
-          const p = py[i];
-          if (HAN_RE.test(c) && typeof p === "string" && /[a-zA-Zü]/.test(p)) {
+          const p = py && py[i];
+          if (py && HAN_RE.test(c) && typeof p === "string" && /[a-zA-Zü]/.test(p)) {
             s.setAttribute("data-py", p);
           }
           el.appendChild(s);
+          rec.chars.push(s);
         }
       }
 
@@ -165,6 +170,8 @@
 
       function renderPoem(p) {
         const card = document.getElementById("poem-card");
+        stopProgress(false);
+        rec.chars = [];
         fillText(document.getElementById("poem-title"), p.title);
         fillText(document.getElementById("poem-meta"),
           (p.dynasty ? p.dynasty + "代" : "") + (p.author ? " · " + p.author : ""));
@@ -188,6 +195,9 @@
           : (n > 16 ? "1.55" : "");
         if (rec.pinyinOn) card.classList.add("pinyin-on");
         else card.classList.remove("pinyin-on");
+        if (rec.progressOn) card.classList.add("progress-on");
+        else card.classList.remove("progress-on");
+        card.classList.remove("reading");
         card.scrollTop = 0;
         document.getElementById("poem-count").textContent =
           "第 " + (rec.current + 1) + " / " + poems.length + " 首 · 全库循环";
@@ -210,9 +220,97 @@
         document.getElementById("poem-status").textContent = s;
       }
 
+      /* ===== 诵读进度：逐字变色 =====
+         主进度按时间线性推进（任何浏览器都能用）；若语音引擎支持
+         onboundary，再用实测 charIndex 校正：把进度往前拉齐，并反推
+         整首实际时长，避免 TTS 比估算快或慢时声画脱节。 */
+      function stopProgress(clearDom) {
+        if (rec.prog.timer) { clearInterval(rec.prog.timer); rec.prog.timer = null; }
+        rec.prog.idx = -1;
+        rec.prog.boundary = 0;
+        if (clearDom) clearCharMarks();
+      }
+
+      function clearCharMarks() {
+        for (let i = 0; i < rec.chars.length; i++) {
+          rec.chars[i].classList.remove("read");
+          rec.chars[i].classList.remove("cur");
+        }
+      }
+
+      function setProgressIndex(k) {
+        let prev = rec.prog.idx;
+        if (k === prev) return;
+        const chars = rec.chars;
+        if (k < prev) { clearCharMarks(); prev = -1; }
+        // 只改动「上一帧 → 这一帧」之间的字，60 行长诗也不会每帧全量重绘
+        for (let i = Math.max(0, prev); i < k && i < chars.length; i++) {
+          chars[i].classList.remove("cur");
+          chars[i].classList.add("read");
+        }
+        if (k >= 0 && k < chars.length) {
+          chars[k].classList.remove("read");
+          chars[k].classList.add("cur");
+        }
+        rec.prog.idx = k;
+        // 长诗自动滚到正在读的字（只滚卡片内部，不带动整页）
+        const cur = chars[k];
+        const card = document.getElementById("poem-card");
+        if (cur && card && typeof card.clientHeight === "number" && card.clientHeight > 0) {
+          const top = (cur.offsetTop || 0) - (card.offsetTop || 0);
+          if (top < card.scrollTop + 24 || top > card.scrollTop + card.clientHeight - 56) {
+            card.scrollTop = Math.max(0, top - card.clientHeight * 0.42);
+          }
+        }
+      }
+
+      function stepProgress() {
+        if (!rec.playing || !rec.chars.length) return;
+        const elapsed = Date.now() - rec.prog.start;
+        let ratio = elapsed / rec.prog.duration;
+        if (rec.prog.boundary > ratio) ratio = rec.prog.boundary;
+        ratio = Math.max(0, Math.min(1, ratio));
+        setProgressIndex(Math.min(rec.chars.length - 1, Math.floor(ratio * rec.chars.length)));
+      }
+
+      function startProgress(durationMs) {
+        stopProgress(false);
+        if (!rec.chars.length) return;
+        clearCharMarks();
+        const card = document.getElementById("poem-card");
+        if (card) card.classList.add("reading");
+        rec.prog.start = Date.now();
+        rec.prog.duration = Math.max(600, durationMs);
+        rec.prog.idx = -1;
+        rec.prog.boundary = 0;
+        rec.prog.timer = setInterval(stepProgress, 70);
+        stepProgress();
+      }
+
+      function finishProgress() {
+        stopProgress(false);
+        clearCharMarks();
+        for (let i = 0; i < rec.chars.length; i++) rec.chars[i].classList.add("read");
+        rec.prog.idx = rec.chars.length;
+      }
+
+      function onSpeechBoundary(e, textLen) {
+        const ci = e && typeof e.charIndex === "number" ? e.charIndex : 0;
+        if (!rec.playing || ci <= 0 || !textLen) return;
+        const frac = Math.min(1, ci / textLen);
+        const elapsed = Date.now() - rec.prog.start;
+        if (elapsed > 250 && frac > 0.02 && frac < 0.95) {
+          const est = elapsed / frac;            // 实测反推整首时长，平滑修正估算
+          rec.prog.duration = rec.prog.duration * 0.55 + est * 0.45;
+        }
+        if (frac > rec.prog.boundary) rec.prog.boundary = frac;
+        stepProgress();
+      }
+
       function clearTimers() {
         if (rec.timer) { clearTimeout(rec.timer); rec.timer = null; }
         if (rec.keepTimer) { clearInterval(rec.keepTimer); rec.keepTimer = null; }
+        if (rec.prog.timer) { clearInterval(rec.prog.timer); rec.prog.timer = null; }
       }
 
       function stopSpeech() {
@@ -234,7 +332,6 @@
       function nextRound() {
         if (!rec.playing || !poems.length) return;
         if (rec.round >= rec.repeat) {
-          document.getElementById("poem-card").classList.remove("reading");
           updateStatus("准备下一首");
           // 设定遍数读完，稍作停顿后自动切下一首（末尾回到第 1 首，实现循环）
           rec.timer = setTimeout(function () { showPoem(rec.current + 1); }, 1400);
@@ -243,31 +340,34 @@
         rec.round++;
         updateStatus();
         const p = poems[rec.current];
-        const silentMs = Math.max(3500, speechText(p).length * 330);
+        const text = speechText(p);
+        const silentMs = Math.max(3500, text.length * 330);
+        const onDone = function () {
+          finishProgress();                  // 读完整首全部转为暖金，稍停再进下一遍 / 下一首
+          if (rec.playing) rec.timer = setTimeout(nextRound, 650);
+        };
+        // 静音轮播：按字数估算时长，逐字变色与语音模式完全一致
         if (!rec.voiceOn || !rec.synth || typeof SpeechSynthesisUtterance === "undefined") {
-          // 静音轮播：按字数估算每遍时长，流程完全一致
-          rec.timer = setTimeout(nextRound, silentMs);
+          startProgress(silentMs);
+          rec.timer = setTimeout(onDone, silentMs);
           return;
         }
-        const u = new SpeechSynthesisUtterance(speechText(p));
+        const u = new SpeechSynthesisUtterance(text);
         u.lang = "zh-CN";
         u.rate = 0.82;
         u.pitch = 1;
         u.volume = 1;
         const v = pickVoice();
         if (v) u.voice = v;
-        u.onend = function () {
-          if (rec.playing) rec.timer = setTimeout(nextRound, 650);
-        };
-        u.onerror = function () {
-          if (rec.playing) rec.timer = setTimeout(nextRound, 650);
-        };
-        document.getElementById("poem-card").classList.add("reading");
+        u.onboundary = function (e) { onSpeechBoundary(e, text.length); };
+        u.onend = onDone;
+        u.onerror = onDone;
+        startProgress(silentMs);
         try {
           rec.synth.speak(u);
           keepAlive();
         } catch (e) {
-          rec.timer = setTimeout(nextRound, silentMs);
+          rec.timer = setTimeout(onDone, silentMs);
         }
       }
 
@@ -296,6 +396,7 @@
         } else {
           clearTimers();
           stopSpeech();
+          stopProgress(true);                // 暂停时清掉逐字高亮，恢复原本清晰配色
           document.getElementById("poem-card").classList.remove("reading");
         }
         document.getElementById("poem-play").textContent = on ? "⏸ 暂停" : "▶ 开始诵读";
@@ -322,14 +423,17 @@
         rec.resumeMode = storeGet(POEM_RESUME_KEY, "0") === "1";
         rec.repeat = clampRepeat(storeGet(POEM_REPEAT_KEY, "1"));
         rec.pinyinOn = storeGet(POEM_PINYIN_KEY, "1") === "1";
+        rec.progressOn = storeGet(POEM_PROGRESS_KEY, "1") === "1";
 
         const resumeBox = document.getElementById("poem-resume");
         const voiceBox = document.getElementById("poem-voice");
         const pinyinBox = document.getElementById("poem-pinyin");
+        const progressBox = document.getElementById("poem-progress");
         const repeatSel = document.getElementById("poem-repeat");
         resumeBox.checked = rec.resumeMode;
         voiceBox.checked = rec.voiceOn;
         pinyinBox.checked = rec.pinyinOn;
+        progressBox.checked = rec.progressOn;
         repeatSel.value = String(rec.repeat);
 
         poems = parsePoemBook(builtinPoemText());
@@ -356,7 +460,17 @@
         pinyinBox.addEventListener("change", function () {
           rec.pinyinOn = pinyinBox.checked;
           storeSet(POEM_PINYIN_KEY, rec.pinyinOn ? "1" : "0");
-          if (poems.length) renderPoem(poems[rec.current]);
+          if (rec.playing) stopSpeech();
+          if (poems.length) renderPoem(poems[rec.current]);   // 逐字节点重建
+          if (rec.playing) startRounds();                     // 从本首第 1 遍重来，进度状态保持一致
+          updateStatus();
+        });
+        progressBox.addEventListener("change", function () {
+          rec.progressOn = progressBox.checked;
+          storeSet(POEM_PROGRESS_KEY, rec.progressOn ? "1" : "0");
+          const card = document.getElementById("poem-card");
+          if (rec.progressOn) card.classList.add("progress-on");
+          else card.classList.remove("progress-on");
           updateStatus();
         });
         resumeBox.addEventListener("change", function () {

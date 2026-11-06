@@ -52,12 +52,16 @@ try {
 console.log("\n=== DOM / 控件 / 样式 ===");
 const ids = ["poem-stage", "poem-card", "poem-title", "poem-meta", "poem-body", "poem-count",
   "poem-panel", "poem-play", "poem-prev", "poem-next", "poem-repeat", "poem-pinyin",
+  "poem-progress",
   "poem-resume", "poem-voice", "poem-pick", "poem-file", "poem-status",
   "poem-pinyin-fixes", "poem-data"];
 ids.forEach((id) => chk('id="' + id + '" 唯一', (h.match(new RegExp('id="' + id + '"', "g")) || []).length === 1));
 chk("重复次数默认选中 1 遍", /<option value="1" selected>/.test(h));
 chk("拼音开关默认勾选", /id="poem-pinyin" checked/.test(h));
+chk("朗读进度开关默认勾选", /id="poem-progress" checked/.test(h));
 chk("拼音伪元素样式存在", /\.py\[data-py\]::before/.test(h));
+chk("逐字进度三态样式存在", /\.py\.read/.test(h) && /\.py\.cur/.test(h) && /reading\.progress-on/.test(h));
+chk("进度状态机已注入", /function startProgress/.test(M) && /onSpeechBoundary/.test(M));
 chk("无未替换占位符", !/__PINYIN_LIB__|__PINYIN_FIXES__|__POEM_DATA__/.test(h));
 chk("无旧飘落逻辑残留", !/my_labels|showNextLabel|LABEL_MS|setPoemLines/.test(h));
 chk("硬编码 2 遍已移除", !/round >= 2|\/2 遍/.test(M));

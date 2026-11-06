@@ -61,12 +61,16 @@
         opacity: .72;
       }
 
-      /* ===== 逐字拼音 =====
-         每个字是独立的 inline-grid：第 1 行放拼音伪元素，第 2 行放汉字。
-         列宽自动取两者较宽者，因此 chuáng 这类长音节会自己把字格撑开，
-         绝不会与相邻字的拼音挤在一起。拼音存在 data-py 属性里，
-         DOM 文本仍只有纯汉字，复制 / textContent 都不会夹带拼音。 */
+      /* ===== 逐字拼音 + 诵读进度 =====
+         每个汉字都是独立 span：拼音开时是 inline-grid（第 1 行拼音伪元素、
+         第 2 行汉字，列宽自动取较宽者，chuáng 不会挤到邻字）；
+         拼音关时退回普通 inline，排版与纯文本一致。
+         拼音存在 data-py 里，DOM 文本仍只有纯汉字，复制不会夹带拼音。 */
       #poem-card .py {
+        display: inline;
+        transition: color .16s linear, text-shadow .16s linear;
+      }
+      #poem-card.pinyin-on .py {
         display: inline-grid;
         grid-auto-flow: row;
         justify-items: center;
@@ -83,14 +87,31 @@
         font-weight: 400;
         letter-spacing: 0;
         white-space: nowrap;
-        color: #d8b98a;
-        opacity: .94;
+        color: currentColor;               /* 拼音跟随汉字一起显示进度 */
+        opacity: .66;
         pointer-events: none;
+        transition: opacity .16s linear, text-shadow .16s linear;
       }
       /* 拼音占位：给标题首行留头，并加大行距避免与上一行相撞 */
       #poem-card.pinyin-on .poem-title { padding-top: .18em; }
       #poem-card.pinyin-on .poem-meta { margin-top: 14px; }
       #poem-card.pinyin-on .poem-body { line-height: 2.05; }
+
+      /* ===== 诵读进度：逐字变色 =====
+         只在诵读中生效：未读压暗 → 已读暖金 → 当前字亮白发光。
+         暂停 / 未开始时没有 reading 类，整首诗恢复原本清晰配色。 */
+      #poem-card.reading.progress-on .py { color: rgba(240, 223, 190, .46); }
+      #poem-card.reading.progress-on .py.read { color: #ffcf83; }
+      #poem-card.reading.progress-on .py.cur {
+        color: #fff8e8;
+        text-shadow: 0 0 9px rgba(255, 208, 122, .95), 0 0 22px rgba(255, 168, 66, .6);
+      }
+      #poem-card.reading.progress-on .py[data-py]::before { opacity: .52; }
+      #poem-card.reading.progress-on .py.read[data-py]::before { opacity: .8; }
+      #poem-card.reading.progress-on .py.cur[data-py]::before {
+        opacity: 1;
+        text-shadow: 0 0 8px rgba(255, 208, 122, .85);
+      }
 
       /* ===== 右下角控制面板 ===== */
       #poem-panel {
