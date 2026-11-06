@@ -1,11 +1,11 @@
-      /* ===== 唐诗整首诵读 =====
-         · 数据：内联的 poem-data 文本节点中存有全量诗库（双击打开即可用）；
-           通过本地服务器打开时会自动 fetch 同目录「唐诗.txt」覆盖；
-           file:// 下也可点右下角「载入 唐诗.txt」手动选择
+      /* ===== 诗词整首诵读 =====
+         · 数据：内联的 poem-data 文本节点中存有五类离线诗库（双击打开即可用，不依赖任何文件）：
+           唐诗 / 宋词 / 元明清诗词 / 近代诗词 / 毛主席诗词，用「播放内容」下拉切换
          · 流程：整首显示（逐字拼音 + 逐字进度变色）→ 诵读 N 遍（默认 1 遍）→ 停顿 → 下一首 → 全库循环
-         · 开关：每首诵读遍数、逐字拼音、朗读进度变色、「接着上次继续」，均用 localStorage 记住 */
+         · 开关：播放内容分类、每首诵读遍数、逐字拼音、朗读进度变色、「接着上次继续」，均用 localStorage 记住 */
 
-      const POEM_INDEX_KEY = "tangpoem.index";
+      const POEM_INDEX_KEY = "tangpoem.index";   // 旧版单一位置键（仅用于唐诗兼容回读）
+      const POEM_BOOK_KEY = "tangpoem.book";     // 当前选中的分类
       const POEM_RESUME_KEY = "tangpoem.resume";
       const POEM_REPEAT_KEY = "tangpoem.repeat";
       const POEM_PINYIN_KEY = "tangpoem.pinyin";
@@ -13,6 +13,16 @@
       const POEM_LIGHT_KEY = "tangpoem.treelight";
       const POEM_DIMMER_KEY = "tangpoem.dimmer";
       const POEM_TIPSHOWN_KEY = "tangpoem.tipshown";
+
+      // 五个离线分类：id 用于 localStorage 与 bundle 解析，name 用于界面与状态栏
+      const BOOK_DEFS = [
+        { id: "tang",     name: "唐诗" },
+        { id: "song",     name: "宋词" },
+        { id: "mingqing", name: "元明清诗词" },
+        { id: "jindai",   name: "近代诗词" },
+        { id: "mao",      name: "毛主席诗词" },
+      ];
+      function indexKey(id) { return "tangpoem.idx." + id; }
 
       let poems = [];
       const rec = {
@@ -29,6 +39,8 @@
         keepTimer: null,
         voiceOn: true,
         resumeMode: false,
+        bookId: "tang",              // 当前播放分类
+        bookName: "唐诗",
         synth: window.speechSynthesis || null,
         chars: [],                 // 当前诗所有逐字 span，按阅读顺序
         prog: { timer: null, start: 0, duration: 1, idx: -1, boundary: 0 },
@@ -155,6 +167,27 @@
         return el ? el.textContent : "";
       }
 
+      // 五个离线分类解析：按「##### 分类：XXX #####」切成多库（不依赖网络）
+      let bundles = {};
+      function parseBookBundle(text) {
+        const CAT_RE = /^#####\s*分类[：:]\s*(.+?)\s*#####\s*$/;
+        const blocks = {};
+        let cur = null;
+        const lines = (text || "").split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          const m = line.match(CAT_RE);
+          if (m) { cur = m[1]; blocks[cur] = []; continue; }
+          if (cur !== null) blocks[cur].push(lines[i]);
+        }
+        const out = {};
+        BOOK_DEFS.forEach(function (b) {
+          const raw = blocks[b.name];
+          out[b.id] = raw ? parsePoemBook(raw.join("\n")) : [];
+        });
+        return out;
+      }
+
       function storeGet(key, dflt) {
         try { const v = localStorage.getItem(key); return v === null ? dflt : v; }
         catch (e) { return dflt; }
@@ -167,15 +200,18 @@
         return isFinite(n) && n >= 1 && n <= 10 ? n : 1;
       }
 
-      function startIndex() {
+      function startIndexFor(id) {
         if (!poems.length) return 0;
-        const n = parseInt(storeGet(POEM_INDEX_KEY, "0"), 10);
-        if (!rec.resumeMode || !isFinite(n)) return 0;
+        if (!rec.resumeMode) return 0;
+        let n = parseInt(storeGet(indexKey(id), "NA"), 10);
+        if (!isFinite(n) && id === "tang") n = parseInt(storeGet(POEM_INDEX_KEY, "NA"), 10);
+        if (!isFinite(n)) return 0;
         return ((n % poems.length) + poems.length) % poems.length;
       }
 
       function speechText(p) {
-        const meta = (p.dynasty ? p.dynasty + "代，" : "") + (p.author ? p.author + "。" : "");
+        const dyn = p.dynasty ? (p.dynasty.slice(-1) === "代" ? p.dynasty : p.dynasty + "代") : "";
+        const meta = (dyn ? dyn + "，" : "") + (p.author ? p.author + "。" : "");
         return p.title + "。" + meta + p.lines.join("");
       }
 
@@ -254,8 +290,9 @@
         stopProgress(false);
         rec.chars = [];
         fillText(document.getElementById("poem-title"), p.title);
+        const dyn = p.dynasty ? (p.dynasty.slice(-1) === "代" ? p.dynasty : p.dynasty + "代") : "";
         fillText(document.getElementById("poem-meta"),
-          (p.dynasty ? p.dynasty + "代" : "") + (p.author ? " · " + p.author : ""));
+          dyn + (p.author ? " · " + p.author : ""));
         const body = document.getElementById("poem-body");
         body.textContent = "";
         p.lines.forEach(function (s) {
@@ -271,7 +308,7 @@
         card.classList.remove("reading");
         card.scrollTop = 0;
         document.getElementById("poem-count").textContent =
-          "第 " + (rec.current + 1) + " / " + poems.length + " 首 · 全库循环";
+          rec.bookName + " · 第 " + (rec.current + 1) + " / " + poems.length + " 首 · 全库循环";
         card.classList.remove("show");
         void card.offsetWidth;                     // 强制重排以重放淡入动画
         card.classList.add("show");
@@ -279,8 +316,8 @@
 
       function updateStatus(extra) {
         let s = poems.length
-          ? "第 " + (rec.current + 1) + " / " + poems.length + " 首"
-          : "诗库为空";
+          ? rec.bookName + " · 第 " + (rec.current + 1) + " / " + poems.length + " 首"
+          : rec.bookName + " · 诗库为空";
         if (rec.playing) {
           s += " · 诵读 " + Math.min(rec.round, rec.repeat) + "/" + rec.repeat + " 遍";
           if (!rec.voiceOn || !rec.synth) s += "（静音）";
@@ -461,7 +498,7 @@
         bumpGen();
         clearTimers();
         rec.current = ((i % poems.length) + poems.length) % poems.length;
-        storeSet(POEM_INDEX_KEY, rec.current);   // 始终记录位置，供「续读」模式使用
+        storeSet(indexKey(rec.bookId), rec.current);   // 始终记录位置，供「续读」模式使用
         rec.round = 0;
         renderPoem(poems[rec.current]);
         document.getElementById("poem-card").classList.remove("reading");
@@ -484,18 +521,22 @@
         updateStatus();
       }
 
-      function loadBook(text, source) {
-        const list = parsePoemBook(text);
+      function loadBookById(id) {
+        const def = BOOK_DEFS.find(function (b) { return b.id === id; }) || BOOK_DEFS[0];
+        const list = bundles[def.id] || [];
         if (!list.length) return false;
         bumpGen();
         stopSpeech();
         clearTimers();
+        rec.bookId = def.id;
+        rec.bookName = def.name;
         poems = list;
-        rec.current = startIndex();
-        renderPoem(poems[rec.current]);
+        rec.current = startIndexFor(def.id);
+        renderPoem(poems[rec.current] || { title: "诗库为空", dynasty: "", author: "", lines: [] });
         rec.round = 0;
-        storeSet(POEM_INDEX_KEY, rec.current);
-        updateStatus("已载入 " + source + " · " + poems.length + " 首");
+        storeSet(POEM_BOOK_KEY, def.id);
+        storeSet(indexKey(def.id), rec.current);
+        updateStatus("已切换到 " + def.name + " · " + poems.length + " 首");
         if (rec.playing) startRounds();
         return true;
       }
@@ -585,9 +626,11 @@
         applyDimmer();
         initTipQr();
 
-        poems = parsePoemBook(builtinPoemText());
-        rec.current = startIndex();
-        renderPoem(poems[rec.current] || { title: "诗库为空", dynasty: "", author: "", lines: [] });
+        // 解析五类离线诗库，并按记忆的分类载入（全部内联，不联网）
+        bundles = parseBookBundle(builtinPoemText());
+        const savedBook = storeGet(POEM_BOOK_KEY, "tang");
+        rec.bookId = BOOK_DEFS.some(function (b) { return b.id === savedBook; }) ? savedBook : "tang";
+        loadBookById(rec.bookId);
         updateStatus("点「开始诵读」进入自动循环");
 
         document.getElementById("poem-play").addEventListener("click", function () {
@@ -646,21 +689,12 @@
           updateStatus();
         });
 
-        // 手动选择本地 唐诗.txt（file:// 双击打开时使用）
-        const fileInput = document.getElementById("poem-file");
-        document.getElementById("poem-pick").addEventListener("click", function () {
-          fileInput.click();
-        });
-        fileInput.addEventListener("change", function (e) {
-          const file = e.target.files && e.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = function () {
-            if (!loadBook(decodeBuffer(reader.result), file.name)) {
-              document.getElementById("poem-status").textContent = "没有解析到诗，请检查「===== / 诗名：/ 正文：」格式";
-            }
-          };
-          reader.readAsArrayBuffer(file);
+        // 播放内容切换：切到另一分类时作废旧诵读回调，避免错位
+        const bookSel = document.getElementById("poem-book");
+        bookSel.value = rec.bookId;
+        bookSel.addEventListener("change", function () {
+          if (!loadBookById(bookSel.value)) return;
+          updateStatus("已切换到 " + rec.bookName + " · " + poems.length + " 首");
         });
 
         // 中文语音列表常为异步加载
@@ -673,15 +707,5 @@
           });
         }
 
-        // 通过本地服务器打开时，自动读取同目录 唐诗.txt 覆盖内置诗库
-        fetch("唐诗.txt", { cache: "no-store" })
-          .then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.arrayBuffer();
-          })
-          .then(function (buf) { loadBook(decodeBuffer(buf), "唐诗.txt"); })
-          .catch(function () {
-            updateStatus("内置诗库 " + poems.length + " 首 · 可点按钮载入 唐诗.txt");
-          });
       }
 

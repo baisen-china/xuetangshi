@@ -6,7 +6,11 @@ const fs = require("fs");
 const vm = require("vm");
 const D = "C:/c/inventory/_data/";
 const code = fs.readFileSync(D + "new_script.js", "utf8");
-const bookText = fs.readFileSync("C:/c/inventory/唐诗.txt", "utf8");
+const BOOK_FILES = ["唐诗.txt", "宋词.txt", "元明清诗词.txt", "近代诗词.txt", "毛主席诗词.txt"];
+const CAT_NAMES = ["唐诗", "宋词", "元明清诗词", "近代诗词", "毛主席诗词"];
+const bundle = BOOK_FILES.map(function (f, i) {
+  return "##### 分类：" + CAT_NAMES[i] + " #####\n" + fs.readFileSync("C:/c/inventory/" + f, "utf8");
+}).join("\n");
 const fixesText = fs.readFileSync(D + "pinyin_fixes_final.json", "utf8");
 const pinyinPro = require(D + "pinyin-pro.js");
 
@@ -37,7 +41,7 @@ function makeEl(id) {
 function scene() {
   const els = {};
   const get = (id) => els[id] || (els[id] = makeEl(id));
-  get("poem-data").textContent = bookText;
+  get("poem-data").textContent = bundle;
   get("poem-pinyin-fixes").textContent = fixesText;
 
   const timers = [];

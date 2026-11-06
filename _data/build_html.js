@@ -1,7 +1,24 @@
 const fs = require("fs");
 const HTML = "C:/c/inventory/christmas_tree_fixed.html";
-const BOOK = "C:/c/inventory/唐诗.txt";
 const D = "C:/c/inventory/_data/";
+
+// 五个离线诗库（双击打开 / 离线运行都可用，全部内联，不依赖任何外部文件）
+const BOOK_FILES = [
+  { id: "tang",     name: "唐诗",       file: "唐诗.txt" },
+  { id: "song",     name: "宋词",       file: "宋词.txt" },
+  { id: "mingqing", name: "元明清诗词", file: "元明清诗词.txt" },
+  { id: "jindai",   name: "近代诗词",   file: "近代诗词.txt" },
+  { id: "mao",      name: "毛主席诗词", file: "毛主席诗词.txt" },
+];
+function readBook(file) {
+  const t = fs.readFileSync("C:/c/inventory/" + file, "utf8");
+  if (/<\/script/i.test(t)) throw new Error(file + " 含 </script>，无法安全内联");
+  return t;
+}
+// 用分类标记把五库拼成一个 bundle，内联到单个 #poem-data 文本节点
+const bookBundle = BOOK_FILES.map(function (b) {
+  return "##### 分类：" + b.name + " #####\n" + readBook(b.file);
+}).join("\n");
 
 // --rebuild：从原始备份重新注入全部片段（改过 new_*.* 后用这个）
 // 默认：已改造时只刷新内嵌诗库数据
@@ -10,10 +27,9 @@ const BAK = D + "christmas_tree_fixed.bak.html";
 let html = REBUILD && fs.existsSync(BAK)
   ? fs.readFileSync(BAK, "utf8")
   : fs.readFileSync(HTML, "utf8");
-const bookText = fs.readFileSync(BOOK, "utf8");
 
-if (/<\/script/i.test(bookText)) {
-  throw new Error("诗库文本含 </script>，无法安全内联");
+if (/<\/script/i.test(bookBundle)) {
+  throw new Error("诗库 bundle 含 </script>，无法安全内联");
 }
 
 function replaceRange(src, startMark, endMark, replacement, label) {
@@ -28,9 +44,9 @@ function replaceRange(src, startMark, endMark, replacement, label) {
 if (!REBUILD && html.indexOf('id="poem-stage"') >= 0) {
   const re = /(<script id="poem-data" type="text\/plain">)[\s\S]*?(<\/script>)/;
   if (!re.test(html)) throw new Error("未找到内嵌诗库节点");
-  html = html.replace(re, (m, a, b) => a + "\n" + bookText + "    " + b);
+  html = html.replace(re, (m, a, b) => a + "\n" + bookBundle + "    " + b);
   fs.writeFileSync(HTML, html, "utf8");
-  console.log("已刷新内嵌诗库数据，共", (bookText.match(/^=====/gm) || []).length, "首");
+  console.log("已刷新内嵌诗库数据，共", (bookBundle.match(/^=====/gm) || []).length, "首");
   process.exit(0);
 }
 
@@ -70,7 +86,7 @@ const newDom = fs.readFileSync(D + "new_dom.html", "utf8")
   .replace("__PINYIN_FIXES__", () => pinyinFixes)
   .replace("__TIP_QR_B64__", () => qrB64)
   .replace("__TIP_QR_HASH__", () => qrHash)
-  .replace("__POEM_DATA__", () => bookText);
+  .replace("__POEM_DATA__", () => bookBundle);
 const newScript = fs.readFileSync(D + "new_script.js", "utf8");
 
 // 1) 样式：替换旧的飘落动画 + 旧载入控件样式
@@ -173,5 +189,5 @@ if (html.indexOf("attribute float isRed;") < 0) {
 
 fs.writeFileSync(HTML, html, "utf8");
 console.log("改造完成，HTML 字节:", Buffer.byteLength(html, "utf8"));
-console.log("内嵌诗库首数:", (bookText.match(/^=====/gm) || []).length);
+console.log("内嵌诗库首数:", (bookBundle.match(/^=====/gm) || []).length);
 console.log("内嵌打赏码: base64", qrB64.length, "字符 | 指纹", qrHash);

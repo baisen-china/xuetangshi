@@ -16,6 +16,15 @@
         <button id="poem-prev" type="button" title="上一首">⏮</button>
         <button id="poem-next" type="button" title="下一首">⏭</button>
       </div>
+      <label class="sel">播放内容
+        <select id="poem-book" title="切换要播放的诗词分类（五类均已离线内置）">
+          <option value="tang">唐诗</option>
+          <option value="song">宋词</option>
+          <option value="mingqing">元明清诗词</option>
+          <option value="jindai">近代诗词</option>
+          <option value="mao">毛主席诗词</option>
+        </select>
+      </label>
       <label class="sel">每首诵读
         <select id="poem-repeat" title="默认每首诵读 1 遍，之后自动切下一首">
           <option value="1" selected>1 遍</option>
@@ -30,10 +39,6 @@
       <label class="chk"><input type="checkbox" id="poem-dimmer" /> 背景压暗（默认原版背景）</label>
       <label class="chk"><input type="checkbox" id="poem-resume" /> 接着上次继续（取消＝每次从第一首）</label>
       <label class="chk"><input type="checkbox" id="poem-voice" checked /> 语音诵读（取消＝静音轮播）</label>
-      <div class="row">
-        <button id="poem-pick" type="button">载入 唐诗.txt</button>
-        <input id="poem-file" type="file" accept=".txt,text/plain" hidden />
-      </div>
       <div id="poem-status">准备中…</div>
     </div>
 

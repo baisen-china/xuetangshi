@@ -3,7 +3,6 @@ const fs = require("fs");
 const vm = require("vm");
 const D = "C:/c/inventory/_data/";
 const code = fs.readFileSync(D + "new_script.js", "utf8");
-const bookText = fs.readFileSync("C:/c/inventory/唐诗.txt", "utf8");
 const fixesText = fs.readFileSync(D + "pinyin_fixes_final.json", "utf8");
 const pinyinPro = require(D + "pinyin-pro.js");
 const qrB64 = fs.readFileSync("C:/c/inventory/打赏码1.jpg").toString("base64");
@@ -42,7 +41,12 @@ function scene(opts) {
   opts = opts || {};
   const els = {};
   const get = (id) => els[id] || (els[id] = makeEl(id));
-  get("poem-data").textContent = bookText;
+  const BOOK_FILES = ["唐诗.txt", "宋词.txt", "元明清诗词.txt", "近代诗词.txt", "毛主席诗词.txt"];
+  const CAT_NAMES = ["唐诗", "宋词", "元明清诗词", "近代诗词", "毛主席诗词"];
+  const bundle = BOOK_FILES.map(function (f, i) {
+    return "##### 分类：" + CAT_NAMES[i] + " #####\n" + fs.readFileSync("C:/c/inventory/" + f, "utf8");
+  }).join("\n");
+  get("poem-data").textContent = bundle;
   get("poem-pinyin-fixes").textContent = fixesText;
   get("tip-qr-data").textContent = opts.qrData !== undefined ? opts.qrData : qrB64;
   get("tip-qr-hash").textContent = opts.qrHash !== undefined ? opts.qrHash : qrHash;
@@ -71,7 +75,7 @@ function scene(opts) {
     setTimeout: () => 1, clearTimeout: () => {},
     setInterval: () => 2, clearInterval: () => {},
   };
-  vm.runInNewContext(code + "\n;globalThis.__T = { initPoemReciter, rec, fitPoemFont, renderPoem, tipHash, getPoems: () => poems };", sandbox);
+  vm.runInNewContext(code + "\n;globalThis.__T = { initPoemReciter, rec, fitPoemFont, renderPoem, tipHash, loadBookById, getPoems: () => poems };", sandbox);
   const T = sandbox.__T;
   T.initPoemReciter();
   return { T, get, store, win };
@@ -169,6 +173,22 @@ chk("重开页面记得上次压暗选择", d1.T.rec.dimmerOn === true &&
 const cssText = fs.readFileSync(D + "new_style.css", "utf8");
 chk("样式表不再模糊 / 缩放背景", !/backdrop-filter\s*:|transform:\s*scale/i.test(cssText));
 chk("压暗层默认透明", /#bg-dimmer\s*\{[^}]*background: none;/.test(cssText));
+
+console.log("\n=== E 播放内容切换（五类离线分类） ===");
+const e0 = scene({});
+chk("默认分类「唐诗」载入 480 首", e0.T.rec.bookId === "tang" && e0.T.rec.bookName === "唐诗" && e0.T.getPoems().length === 480);
+chk("状态栏/计数带分类名", (e0.get("poem-count").textContent + e0.get("poem-status").textContent).indexOf("唐诗") >= 0);
+const bookSel = e0.get("poem-book");
+bookSel.value = "song"; bookSel._ev.change();
+chk("切「宋词」→ 60 首且名称更新", e0.T.rec.bookId === "song" && e0.T.rec.bookName === "宋词" && e0.T.getPoems().length === 60);
+chk("切换写入 tangpoem.book", e0.store["tangpoem.book"] === "song");
+bookSel.value = "mao"; bookSel._ev.change();
+chk("切「毛主席诗词」→ 16 首", e0.T.rec.bookId === "mao" && e0.T.getPoems().length === 16);
+const e1 = scene({ store: { "tangpoem.book": "mingqing" } });
+chk("重开记住上次分类「元明清诗词」→ 23 首", e1.T.rec.bookId === "mingqing" && e1.T.rec.bookName === "元明清诗词" && e1.T.getPoems().length === 23);
+const e2 = scene({ store: { "tangpoem.book": "jindai" } });
+chk("切「近代诗词」→ 16 首", e2.T.rec.bookId === "jindai" && e2.T.getPoems().length === 16);
+chk("代码无 fetch(唐诗.txt) 联网残留", !/fetch\(\s*"唐诗\.txt"/.test(fs.readFileSync(D + "new_script.js", "utf8")));
 
 console.log("\n=== 结论 ===");
 const ok = checks.every(Boolean);

@@ -38,7 +38,11 @@ function fnv1a(s) {
 console.log("=== 内联内容完整性 ===");
 chk("拼音引擎内联且逐字未被替换符破坏", L === lib, L ? L.length + " 字符" : "缺失");
 chk("古音补丁数据完整", F === fixes, F ? JSON.parse(F).length + " 条" : "缺失");
-chk("诗库数据完整", P === "\n" + book + "    ", P ? (P.match(/^=====/gm) || []).length + " 首" : "缺失");
+const catCount = (P.match(/^##### 分类：/gm) || []).length;
+const poemCount = (P.match(/^=====/gm) || []).length;
+chk("诗库 bundle 含 5 个分类标记", catCount === 5, catCount + " 类");
+chk("诗库 bundle 共 595 首", poemCount === 595, poemCount + " 首");
+chk("五类分类标记齐全", ["唐诗", "宋词", "元明清诗词", "近代诗词", "毛主席诗词"].every(function (n) { return P.indexOf("##### 分类：" + n + " #####") >= 0; }));
 chk("主脚本注入完整", M !== null && M.indexOf(script) >= 0, M ? M.length + " 字符" : "缺失");
 chk("样式注入完整", C !== null && h.indexOf(css) >= 0);
 chk("打赏码 base64 与本地图片一致", QR === qrBuf.toString("base64"), QR ? QR.length + " 字符" : "缺失");
@@ -64,7 +68,7 @@ console.log("\n=== DOM / 控件 / 样式 ===");
 const ids = ["poem-stage", "poem-card", "poem-title", "poem-meta", "poem-body", "poem-count",
   "poem-panel", "poem-play", "poem-prev", "poem-next", "poem-repeat", "poem-pinyin",
   "poem-progress", "poem-treelight", "poem-dimmer", "bg-dimmer",
-  "poem-resume", "poem-voice", "poem-pick", "poem-file", "poem-status",
+  "poem-resume", "poem-voice", "poem-book", "poem-status",
   "tip-open", "tip-modal", "tip-close", "tip-qr", "tip-note", "tip-qr-data", "tip-qr-hash",
   "poem-pinyin-fixes", "poem-data"];
 ids.forEach((id) => chk('id="' + id + '" 唯一', (h.match(new RegExp('id="' + id + '"', "g")) || []).length === 1));
@@ -98,6 +102,11 @@ chk("打赏数据与指纹校验逻辑存在", /function tipHash/.test(M) && /fu
 chk("无未替换占位符", !/__PINYIN_LIB__|__PINYIN_FIXES__|__POEM_DATA__|__TIP_QR_B64__|__TIP_QR_HASH__/.test(h));
 chk("无旧飘落逻辑残留", !/my_labels|showNextLabel|LABEL_MS|setPoemLines/.test(h));
 chk("硬编码 2 遍已移除", !/round >= 2|\/2 遍/.test(M));
+chk("播放内容下拉存在且含 5 个分类", /<select id="poem-book"[\s\S]*?<option value="tang">唐诗<\/option>[\s\S]*?<option value="mao">毛主席诗词<\/option>/s.test(h));
+chk("已移除联网覆盖：无 fetch(唐诗.txt)", !/fetch\(\s*"唐诗\.txt"/.test(h));
+chk("已移除手动载入：无 poem-pick/poem-file", !/id="poem-pick"/.test(h) && !/id="poem-file"/.test(h));
+chk("多分类解析/切换已注入", /function parseBookBundle/.test(M) && /BOOK_DEFS/.test(M) && /function loadBookById/.test(M) && /bookSel/.test(M));
+chk("状态栏/计数显示分类名", /rec\.bookName \+ " · 第 " \+ \(rec\.current \+ 1\)/.test(M));
 
 console.log("\n=== 结论 ===");
 console.log(bad === 0 ? "全部通过" : bad + " 项失败");
