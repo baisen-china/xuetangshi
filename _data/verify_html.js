@@ -25,7 +25,15 @@ const libEnd = h.indexOf("</script>", libStart);
 const L = h.slice(libStart, libEnd);
 const P = grab(/<script id="poem-data" type="text\/plain">([\s\S]*?)<\/script>/);
 const M = grab(/<script id="rendered-js">([\s\S]*?)<\/script>/);
-const C = grab(/      \/\* ===== 唐诗整首展示 ===== \*\/([\s\S]*?)<\/style>/);
+const C = grab(/      \/\* ===== 唐诗整首展示[^\n]*\*\/([\s\S]*?)<\/style>/);
+const QR = grab(/<script id="tip-qr-data" type="text\/plain">([\s\S]*?)<\/script>/);
+const QRH = grab(/<script id="tip-qr-hash" type="text\/plain">([\s\S]*?)<\/script>/);
+const qrBuf = fs.readFileSync("C:/c/inventory/打赏码1.jpg");
+function fnv1a(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16);
+}
 
 console.log("=== 内联内容完整性 ===");
 chk("拼音引擎内联且逐字未被替换符破坏", L === lib, L ? L.length + " 字符" : "缺失");
@@ -33,6 +41,9 @@ chk("古音补丁数据完整", F === fixes, F ? JSON.parse(F).length + " 条" :
 chk("诗库数据完整", P === "\n" + book + "    ", P ? (P.match(/^=====/gm) || []).length + " 首" : "缺失");
 chk("主脚本注入完整", M !== null && M.indexOf(script) >= 0, M ? M.length + " 字符" : "缺失");
 chk("样式注入完整", C !== null && h.indexOf(css) >= 0);
+chk("打赏码 base64 与本地图片一致", QR === qrBuf.toString("base64"), QR ? QR.length + " 字符" : "缺失");
+chk("打赏码指纹正确", QRH.trim() === fnv1a(qrBuf.toString("base64")), QRH.trim());
+chk("页面不引用外部打赏码图片", !/打赏码1\.jpg/.test(h));
 
 console.log("\n=== 语法 ===");
 try { new vm.Script(M); chk("主脚本语法通过", true); } catch (e) { chk("主脚本语法通过", false, e.message); }
@@ -52,17 +63,25 @@ try {
 console.log("\n=== DOM / 控件 / 样式 ===");
 const ids = ["poem-stage", "poem-card", "poem-title", "poem-meta", "poem-body", "poem-count",
   "poem-panel", "poem-play", "poem-prev", "poem-next", "poem-repeat", "poem-pinyin",
-  "poem-progress",
+  "poem-progress", "poem-treelight", "bg-dimmer",
   "poem-resume", "poem-voice", "poem-pick", "poem-file", "poem-status",
+  "tip-open", "tip-modal", "tip-close", "tip-qr", "tip-note", "tip-qr-data", "tip-qr-hash",
   "poem-pinyin-fixes", "poem-data"];
 ids.forEach((id) => chk('id="' + id + '" 唯一', (h.match(new RegExp('id="' + id + '"', "g")) || []).length === 1));
 chk("重复次数默认选中 1 遍", /<option value="1" selected>/.test(h));
 chk("拼音开关默认勾选", /id="poem-pinyin" checked/.test(h));
 chk("朗读进度开关默认勾选", /id="poem-progress" checked/.test(h));
+chk("树灯开关默认勾选", /id="poem-treelight" checked/.test(h));
 chk("拼音伪元素样式存在", /\.py\[data-py\]::before/.test(h));
 chk("逐字进度三态样式存在", /\.py\.read/.test(h) && /\.py\.cur/.test(h) && /reading\.progress-on/.test(h));
 chk("进度状态机已注入", /function startProgress/.test(M) && /onSpeechBoundary/.test(M));
-chk("无未替换占位符", !/__PINYIN_LIB__|__PINYIN_FIXES__|__POEM_DATA__/.test(h));
+chk("诵读代次令牌已注入（防下一首错开）", /function bumpGen/.test(M) && /function schedule/.test(M) && /g !== rec\.gen/.test(M));
+chk("自适应字号已注入", /function fitPoemFont/.test(M) && /createRange/.test(M));
+chk("背景压暗层与打赏弹层样式存在", /#bg-dimmer/.test(h) && /#tip-modal/.test(h) && /#tip-qr/.test(h));
+chk("树灯 shader uniform 已注入", /uniform float uTreeLight;/.test(h) &&
+  /vColor \* uTreeLight/.test(h) && /window\.__treeLight =/.test(h));
+chk("打赏数据与指纹校验逻辑存在", /function tipHash/.test(M) && /function initTipQr/.test(M));
+chk("无未替换占位符", !/__PINYIN_LIB__|__PINYIN_FIXES__|__POEM_DATA__|__TIP_QR_B64__|__TIP_QR_HASH__/.test(h));
 chk("无旧飘落逻辑残留", !/my_labels|showNextLabel|LABEL_MS|setPoemLines/.test(h));
 chk("硬编码 2 遍已移除", !/round >= 2|\/2 遍/.test(M));
 

@@ -1,3 +1,6 @@
+    <!-- 背景压暗层：让 3D 圣诞夜退到后面，诗文成为主角 -->
+    <div id="bg-dimmer"></div>
+
     <div id="poem-stage">
       <div id="poem-card" class="pinyin-on">
         <div class="poem-title" id="poem-title">唐诗诵读</div>
@@ -23,6 +26,7 @@
       </label>
       <label class="chk"><input type="checkbox" id="poem-pinyin" checked /> 逐字拼音</label>
       <label class="chk"><input type="checkbox" id="poem-progress" checked /> 朗读进度变色</label>
+      <label class="chk"><input type="checkbox" id="poem-treelight" checked /> 圣诞树彩灯（取消＝熄灯）</label>
       <label class="chk"><input type="checkbox" id="poem-resume" /> 接着上次继续（取消＝每次从第一首）</label>
       <label class="chk"><input type="checkbox" id="poem-voice" checked /> 语音诵读（取消＝静音轮播）</label>
       <div class="row">
@@ -31,6 +35,20 @@
       </div>
       <div id="poem-status">准备中…</div>
     </div>
+
+    <!-- 打赏：二维码以 base64 内嵌，不引用外部图片文件 -->
+    <button id="tip-open" type="button">打赏支持</button>
+    <div id="tip-modal" class="hidden">
+      <div class="tip-box">
+        <button id="tip-close" type="button" title="关闭">×</button>
+        <div class="tip-title">谢谢您的鼓励</div>
+        <div class="tip-sub">如果这套唐诗诵读陪孩子度过了快乐的时光，<br />欢迎扫码支持一下</div>
+        <img id="tip-qr" alt="打赏二维码" />
+        <div id="tip-note">二维码已内嵌页面，扫描前请核对收款方</div>
+      </div>
+    </div>
+    <script id="tip-qr-data" type="text/plain">__TIP_QR_B64__</script>
+    <script id="tip-qr-hash" type="text/plain">__TIP_QR_HASH__</script>
 
     <!-- 离线拼音引擎：pinyin-pro UMD（内联，双击打开无需联网） -->
     <script>__PINYIN_LIB__</script>

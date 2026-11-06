@@ -39,10 +39,38 @@ const pinyinLib = fs.readFileSync(D + "pinyin-pro.js", "utf8");
 const pinyinFixes = fs.readFileSync(D + "pinyin_fixes_final.json", "utf8");
 if (/<\/script|<!--/i.test(pinyinLib)) throw new Error("拼音库含脚本闭合标记，无法安全内联");
 if (/<\/script|<!--/i.test(pinyinFixes)) throw new Error("补丁数据含脚本闭合标记，无法安全内联");
+
+// 打赏二维码：优先读本地 jpg → base64 内嵌，页面不再引用外部图片文件。
+// 仓库里不含原图；若他人 clone 后本地没有 jpg，就从已改造页面里取回内嵌数据，
+// 保证重新构建时不会把打赏码弄丢。
+const QR_FILE = "C:/c/inventory/打赏码1.jpg";
+let qrB64;
+if (fs.existsSync(QR_FILE)) {
+  const buf = fs.readFileSync(QR_FILE);
+  if (buf[0] !== 0xff || buf[1] !== 0xd8) throw new Error("打赏码不是 JPEG");
+  qrB64 = buf.toString("base64");
+} else {
+  const m = html.match(/<script id="tip-qr-data" type="text\/plain">([\s\S]*?)<\/script>/);
+  if (!m || !m[1].trim()) throw new Error("找不到 打赏码1.jpg，也无法从现有页面提取内嵌二维码");
+  qrB64 = m[1].trim();
+}
+if (/<\/script|<!--/i.test(qrB64)) throw new Error("二维码数据含脚本闭合标记");
+function fnv1a(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
+const qrHash = fnv1a(qrB64);
+
 const newDom = fs.readFileSync(D + "new_dom.html", "utf8")
-  .replace("__PINYIN_LIB__", pinyinLib)
-  .replace("__PINYIN_FIXES__", pinyinFixes)
-  .replace("__POEM_DATA__", bookText);
+  .replace("__PINYIN_LIB__", () => pinyinLib)
+  .replace("__PINYIN_FIXES__", () => pinyinFixes)
+  .replace("__TIP_QR_B64__", () => qrB64)
+  .replace("__TIP_QR_HASH__", () => qrHash)
+  .replace("__POEM_DATA__", () => bookText);
 const newScript = fs.readFileSync(D + "new_script.js", "utf8");
 
 // 1) 样式：替换旧的飘落动画 + 旧载入控件样式
@@ -86,6 +114,25 @@ const oldInterval = /        showNextLabel\(\);\r?\n        \/\/ 一句飘落消
 if (!oldInterval.test(html)) throw new Error("未找到 init 内残留的飘落定时器");
 html = html.replace(oldInterval, "");
 
+// 6) 给 3D 圣诞树的点精灵注入共享亮度 uniform，供「树灯亮/熄」开关使用
+if (html.indexOf("uniform float uTreeLight;") < 0) {
+  const t0 = html.indexOf("function addTree(scene, uniforms, totalPoints, treePosition)");
+  const t1 = html.indexOf("function addSnow(scene, uniforms)", t0 + 1);
+  if (t0 < 0 || t1 < 0) throw new Error("未找到 addTree 区段");
+  let seg = html.slice(t0, t1);
+  const fragRe = /(uniform sampler2D pointTexture;)(\s*void main\(\)\s*\{\s*gl_FragColor = vec4\( vColor, opacity \);)/;
+  if (!fragRe.test(seg)) throw new Error("未找到 addTree 片元着色器");
+  seg = seg.replace(fragRe, function (m, a, b) {
+    return a + "\n      uniform float uTreeLight;" +
+      b.replace("vec4( vColor, opacity )", "vec4( vColor * uTreeLight, opacity )");
+  });
+  const uniRe = /(uniforms: \{\s*\.\.\.uniforms,)/;
+  if (!uniRe.test(seg)) throw new Error("未找到 addTree uniforms");
+  seg = seg.replace(uniRe,
+    '$1\n            uTreeLight: window.__treeLight || (window.__treeLight = { type: "f", value: 1.0 }),');
+  html = html.slice(0, t0) + seg + html.slice(t1);
+}
+
 // 残留检查
 ["my_labels", "showNextLabel", "setPoemLines", "LABEL_MS", "poem-loader", "falling"].forEach((k) => {
   if (html.indexOf(k) >= 0) console.log("注意：仍存在旧标识符 ->", k);
@@ -94,3 +141,4 @@ html = html.replace(oldInterval, "");
 fs.writeFileSync(HTML, html, "utf8");
 console.log("改造完成，HTML 字节:", Buffer.byteLength(html, "utf8"));
 console.log("内嵌诗库首数:", (bookText.match(/^=====/gm) || []).length);
+console.log("内嵌打赏码: base64", qrB64.length, "字符 | 指纹", qrHash);
